@@ -1,0 +1,2 @@
+# prompt to try yolo model
+yolo predict task=segment model=C:\Users\yueny\OneDrive\Documents\ISDN3001\runs\segment\artwork_segmentation3\weights\best.onnx imgsz=640 source=1 conf=0.75

@@ -1,0 +1,1 @@
+scp C:\Users\yueny\OneDrive\Documents\ISDN3001\runs\segment\artwork_segmentation\weights\best.onnx ytyuenab@172.23.49.156:/home/ytyuenab/RP5/models

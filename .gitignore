@@ -1,0 +1,11 @@
+yolo11n.pt
+yolov8n.pt
+yolov8n-seg.pt
+scp.txt
+.venv/
+env/
+Camera module/dataset/
+Camera module/dataset.zip
+Camera module/runs/git
+runs/
+backup/
