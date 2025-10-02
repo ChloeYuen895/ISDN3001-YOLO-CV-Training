@@ -1,0 +1,24 @@
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    ports:
+      - "8554:8554"
+      - "8888:8888"
+      - "1935:1935"
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml
+    restart: unless-stopped
+
+  inference:
+    image: python:3.11-bullseye  # Use full Debian instead of slim
+    container_name: yolo-inference
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./inference:/app
+    working_dir: /app
+    command: bash -c "apt update && apt install -y libgl1 && pip install -r requirements.txt && python inference_server.py"
+    restart: unless-stopped
+    depends_on:
+      - mediamtx
