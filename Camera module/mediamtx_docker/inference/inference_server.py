@@ -3,73 +3,62 @@ import onnxruntime as ort
 import numpy as np
 import time
 import threading
-from flask import Flask, jsonify, Response
-import json
+from flask import Flask, jsonify
 from datetime import datetime
 
 app = Flask(__name__)
 
-class YOLOONNX:
+class ArtworkDetector:
     def __init__(self, model_path):
         self.session = ort.InferenceSession(model_path)
         self.input_name = self.session.get_inputs()[0].name
         self.input_shape = self.session.get_inputs()[0].shape
-        self.input_size = (self.input_shape[2], self.input_shape[3])  # (640, 640)
+        self.input_size = (self.input_shape[2], self.input_shape[3])
         
-        # COCO class names
         self.classes = [
-            'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck',
-            'boat', 'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench',
-            'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra',
-            'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
-            'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove',
-            'skateboard', 'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup',
-            'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange',
-            'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
-            'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse',
-            'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
-            'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
-            'toothbrush'
+            'The Progress of a Soul: The Victory, Phoebe Anna Traquair 1902',
+            'The Execution of Lady Jane Grey, Paul Delaroche 1833',
+            'Café Terrace at Night, Vincent van Gogh 1888'
         ]
         
         self.confidence_threshold = 0.5
         self.iou_threshold = 0.4
 
     def preprocess(self, image):
-        # Resize image to model input size
         img = cv2.resize(image, self.input_size)
-        img = img / 255.0  # Normalize
-        img = img.transpose(2, 0, 1)  # HWC to CHW
+        img = img / 255.0
+        img = img.transpose(2, 0, 1)
         img = np.expand_dims(img, axis=0).astype(np.float32)
         return img
 
     def postprocess(self, outputs, original_shape):
-        predictions = outputs[0][0]  # First batch
+        predictions = outputs[0][0]
         detections = []
         
         for pred in predictions:
-            # Filter by confidence
             confidence = pred[4]
             if confidence < self.confidence_threshold:
                 continue
             
-            # Get class with highest score
             class_scores = pred[5:]
             class_id = np.argmax(class_scores)
             class_confidence = class_scores[class_id]
             
-            # Combined confidence
             total_confidence = confidence * class_confidence
             
             if total_confidence > self.confidence_threshold:
-                # Bounding box coordinates (center x, center y, width, height)
                 cx, cy, w, h = pred[0], pred[1], pred[2], pred[3]
                 
-                # Convert to corner coordinates
                 x1 = int((cx - w/2) * original_shape[1])
                 y1 = int((cy - h/2) * original_shape[0])
                 x2 = int((cx + w/2) * original_shape[1])
                 y2 = int((cy + h/2) * original_shape[0])
+                
+                # Ensure bounding box is within image boundaries
+                x1 = max(0, x1)
+                y1 = max(0, y1)
+                x2 = min(original_shape[1], x2)
+                y2 = min(original_shape[0], y2)
                 
                 detections.append({
                     'class': self.classes[class_id],
@@ -84,24 +73,25 @@ class YOLOONNX:
     def detect(self, image):
         original_shape = image.shape[:2]
         input_tensor = self.preprocess(image)
-        
         outputs = self.session.run(None, {self.input_name: input_tensor})
         detections = self.postprocess(outputs, original_shape)
-        
         return detections
 
 # Global variables
-yolo_model = None
+artwork_model = None
 latest_results = []
 frame_count = 0
 last_inference_time = 0
 INFERENCE_INTERVAL = 0.5  # 2 inferences per second
 
 def initialize_model():
-    global yolo_model
+    global artwork_model
     try:
-        yolo_model = YOLOONNX('C:/Users/yueny/OneDrive/Documents/ISDN3001/Camera module/models/best_detect.onnx')
-        print("YOLO model loaded successfully")
+        # Use your custom artwork detection model
+        model_path = "C:/Users/yueny/OneDrive/Documents/ISDN3001/runs/detect/artwork_recognition/weights/best.onnx"
+        artwork_model = ArtworkDetector(model_path)
+        print("Artwork detection model loaded successfully")
+        print(f"Model classes: {artwork_model.classes}")
     except Exception as e:
         print(f"Error loading model: {e}")
 
@@ -115,14 +105,16 @@ def process_frames():
     
     if not cap.isOpened():
         print("Error: Cannot connect to RTSP stream")
+        print("Waiting for stream to become available...")
+        time.sleep(5)
         return
     
-    print("Connected to RTSP stream, starting inference...")
+    print("Connected to RTSP stream, starting artwork detection...")
     
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("Error reading frame")
+            print("Error reading frame from stream")
             time.sleep(1)
             continue
         
@@ -130,19 +122,19 @@ def process_frames():
         
         # Process 2 frames per second (every 0.5 seconds)
         if current_time - last_inference_time >= INFERENCE_INTERVAL:
-            if yolo_model:
+            if artwork_model:
                 try:
-                    detections = yolo_model.detect(frame)
+                    detections = artwork_model.detect(frame)
                     latest_results = detections
                     
                     # Print results to console
                     if detections:
-                        print(f"Detections: {[(d['class'], d['confidence']) for d in detections]}")
+                        print("Artwork Detections:", [(d['class'], "{:.2f}".format(d['confidence'])) for d in detections])
                     else:
-                        print("No detections")
+                        print("No artworks detected")
                         
                 except Exception as e:
-                    print(f"Inference error: {e}")
+                    print(f"Detection error: {e}")
             
             last_inference_time = current_time
             frame_count += 1
@@ -155,34 +147,52 @@ def get_detections():
     return jsonify({
         'detections': latest_results,
         'frame_count': frame_count,
-        'timestamp': datetime.now().isoformat()
+        'timestamp': datetime.now().isoformat(),
+        'model_loaded': artwork_model is not None
     })
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    return jsonify({'status': 'healthy', 'model_loaded': yolo_model is not None})
+    return jsonify({
+        'status': 'healthy', 
+        'model_loaded': artwork_model is not None,
+        'model_classes': artwork_model.classes if artwork_model else []
+    })
 
 @app.route('/')
 def index():
-    return """
+    detection_summary = ""
+    if latest_results:
+        detection_summary = "<ul>"
+        for detection in latest_results:
+            detection_summary += f"<li>{detection['class']} - {detection['confidence']:.2f}</li>"
+        detection_summary += "</ul>"
+    else:
+        detection_summary = "<p>No artworks detected</p>"
+    
+    return f"""
     <html>
         <head>
-            <title>YOLO Inference Server</title>
+            <title>Artwork Detection Server</title>
             <meta http-equiv="refresh" content="2">
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                .detection {{ background: #f0f0f0; padding: 10px; margin: 5px; border-radius: 5px; }}
+            </style>
         </head>
         <body>
-            <h1>YOLO Inference Server</h1>
-            <p>Model: {}</p>
-            <p>Frame Count: {}</p>
-            <p>Latest Detections: {}</p>
-            <p><a href="/api/detections">View JSON API</a></p>
+            <h1>Artwork Detection Server</h1>
+            <p><strong>Model Status:</strong> {"Loaded" if artwork_model else "Not Loaded"}</p>
+            <p><strong>Frame Count:</strong> {frame_count}</p>
+            <p><strong>Artworks Detected:</strong> {len(latest_results)}</p>
+            <div class="detections">
+                <h3>Latest Detections:</h3>
+                {detection_summary}
+            </div>
+            <p><a href="/api/detections">View JSON API</a> | <a href="/api/health">System Health</a></p>
         </body>
     </html>
-    """.format(
-        "Loaded" if yolo_model else "Not Loaded",
-        frame_count,
-        len(latest_results)
-    )
+    """
 
 if __name__ == '__main__':
     # Initialize model
@@ -193,5 +203,5 @@ if __name__ == '__main__':
     processing_thread.start()
     
     # Start Flask server
-    print("Starting inference server on http://0.0.0.0:5000")
+    print("Starting artwork detection server on http://0.0.0.0:5000")
     app.run(host='0.0.0.0', port=5000, debug=False)
