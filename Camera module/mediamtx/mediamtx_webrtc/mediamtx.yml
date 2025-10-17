@@ -1,0 +1,11 @@
+# MediaMTX Configuration
+rtspAddress: :8554
+readTimeout: 5s
+writeTimeout: 5s
+readBufferCount: 256
+
+paths:
+  mystream:
+    source: publisher
+    sourceProtocol: automatic
+    readBufferCount: 128

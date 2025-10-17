@@ -5,11 +5,15 @@ import time
 import threading
 from flask import Flask, jsonify
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 
 class ArtworkDetector:
     def __init__(self, model_path):
+        print(f"Loading model from: {model_path}")
+        print(f"File exists: {os.path.exists(model_path)}")
+        
         self.session = ort.InferenceSession(model_path)
         self.input_name = self.session.get_inputs()[0].name
         self.input_shape = self.session.get_inputs()[0].shape
@@ -87,13 +91,15 @@ INFERENCE_INTERVAL = 0.5  # 2 inferences per second
 def initialize_model():
     global artwork_model
     try:
-        # Use your custom artwork detection model
-        model_path = "C:/Users/yueny/OneDrive/Documents/ISDN3001/runs/detect/artwork_recognition/weights/best.onnx"
+        # Use relative path since model is copied to inference directory
+        model_path = "best_detect.onnx"
         artwork_model = ArtworkDetector(model_path)
         print("Artwork detection model loaded successfully")
         print(f"Model classes: {artwork_model.classes}")
     except Exception as e:
         print(f"Error loading model: {e}")
+        import traceback
+        traceback.print_exc()
 
 def process_frames():
     global latest_results, frame_count, last_inference_time
@@ -101,6 +107,7 @@ def process_frames():
     # RTSP stream URL from MediaMTX
     stream_url = "rtsp://localhost:8554/cam1"
     
+    print(f"Connecting to RTSP stream: {stream_url}")
     cap = cv2.VideoCapture(stream_url)
     
     if not cap.isOpened():
@@ -130,8 +137,7 @@ def process_frames():
                     # Print results to console
                     if detections:
                         print("Artwork Detections:", [(d['class'], "{:.2f}".format(d['confidence'])) for d in detections])
-                    else:
-                        print("No artworks detected")
+                    # Don't print "no detections" to reduce console spam
                         
                 except Exception as e:
                     print(f"Detection error: {e}")
@@ -165,7 +171,7 @@ def index():
     if latest_results:
         detection_summary = "<ul>"
         for detection in latest_results:
-            detection_summary += f"<li>{detection['class']} - {detection['confidence']:.2f}</li>"
+            detection_summary += f"<li>{detection['class']} - Confidence: {detection['confidence']:.2f}</li>"
         detection_summary += "</ul>"
     else:
         detection_summary = "<p>No artworks detected</p>"
@@ -199,8 +205,12 @@ if __name__ == '__main__':
     initialize_model()
     
     # Start frame processing in background thread
-    processing_thread = threading.Thread(target=process_frames, daemon=True)
-    processing_thread.start()
+    if artwork_model:
+        processing_thread = threading.Thread(target=process_frames, daemon=True)
+        processing_thread.start()
+        print("Frame processing started")
+    else:
+        print("Cannot start frame processing - model not loaded")
     
     # Start Flask server
     print("Starting artwork detection server on http://0.0.0.0:5000")

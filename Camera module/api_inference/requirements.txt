@@ -1,0 +1,8 @@
+fastapi[standard]>=0.104.0
+opencv-python>=4.11.0.86
+torch>=2.8.0
+torchvision>=0.23.0
+ultralytics>=8.3.205
+pillow>=10.0.0
+tensorrt-cu12>=10.13.3.9
+python-multipart>=0.0.20
